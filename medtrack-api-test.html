@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedTrack Backend — API Test Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf8f4;
+    --bg-card: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-muted: #8a8a8a;
+    --rule: #e8e4dc;
+    --accent: #d94f2b;       /* MedTrack red-orange */
+    --accent-soft: #fef0eb;
+    --success: #2d6e3e;
+    --success-soft: #e7f3ea;
+    --error: #c03621;
+    --error-soft: #fde8e4;
+    --warning: #a06a1f;
+    --warning-soft: #fcf3e2;
+    --code-bg: #1e1e1e;
+    --code-ink: #e8e8e8;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  html { scroll-behavior: smooth; }
+  
+  body {
+    font-family: 'IBM Plex Sans Thai', 'Fraunces', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 32px 16px 80px;
+    background-image: 
+      radial-gradient(circle at 20% 10%, rgba(217, 79, 43, 0.03) 0%, transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(45, 110, 62, 0.03) 0%, transparent 40%);
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  .header {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 24px;
+    margin-bottom: 40px;
+    position: relative;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 0;
+    width: 60px;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  .brand {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .brand-name {
+    font-family: 'Fraunces', serif;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  .brand-name em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+
+  .version-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    background: var(--ink);
+    color: var(--bg);
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+  }
+
+  .subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ── Status bar ── */
+  .status-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 40px;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+
+  .status-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .status-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .status-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ink-muted);
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  .status-dot.ok    { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .status-dot.error { background: var(--error); box-shadow: 0 0 0 3px var(--error-soft); }
+  .status-dot.wait  { background: var(--warning); animation: pulse 1.4s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Test card ── */
+  .test-card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .test-card:hover {
+    border-color: var(--ink-soft);
+    box-shadow: var(--shadow-md);
+  }
+
+  .test-card.is-passing { border-color: var(--success); }
+  .test-card.is-failing { border-color: var(--error); }
+
+  .test-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    gap: 16px;
+    border-bottom: 1px solid var(--rule);
+    flex-wrap: wrap;
+  }
+
+  .test-meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .test-num {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+    font-weight: 300;
+    color: var(--ink-muted);
+    line-height: 1;
+    font-feature-settings: "lnum";
+    min-width: 36px;
+  }
+
+  .test-info { flex: 1; min-width: 0; }
+
+  .test-title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+    letter-spacing: -0.01em;
+  }
+
+  .test-desc {
+    font-family: 'IBM Plex Sans Thai', sans-serif;
+    font-size: 13px;
+    color: var(--ink-muted);
+  }
+
+  .test-desc code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 2px;
+    color: var(--ink-soft);
+  }
+
+  /* ── Button ── */
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 18px;
+    border: 1.5px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .btn:active { transform: translateY(1px); }
+
+  .btn:disabled {
+    background: var(--ink-muted);
+    border-color: var(--ink-muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn.is-loading {
+    background: var(--warning);
+    border-color: var(--warning);
+  }
+
+  /* ── Result area ── */
+  .test-result {
+    padding: 0 22px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+  }
+
+  .test-result.is-open {
+    max-height: 1000px;
+    padding: 18px 22px 22px;
+  }
+
+  .result-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  .result-status.is-success { color: var(--success); }
+  .result-status.is-error { color: var(--error); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .badge.success { background: var(--success-soft); color: var(--success); }
+  .badge.error { background: var(--error-soft); color: var(--error); }
+  .badge.warning { background: var(--warning-soft); color: var(--warning); }
+
+  .result-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-muted);
+    margin-bottom: 12px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .assertions {
+    margin-bottom: 12px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    border-radius: 2px;
+    font-size: 13px;
+  }
+
+  .assertion-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    margin: 4px 0;
+  }
+
+  .assertion-line.pass { color: var(--success); }
+  .assertion-line.fail { color: var(--error); }
+
+  .code-block {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 14px 16px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .code-block .k { color: #c586c0; }   /* keyword */
+  .code-block .s { color: #ce9178; }   /* string */
+  .code-block .n { color: #b5cea8; }   /* number */
+  .code-block .b { color: #569cd6; }   /* boolean */
+
+  /* ── Summary footer ── */
+  .summary {
+    margin-top: 40px;
+    padding: 24px;
+    background: var(--ink);
+    color: var(--bg);
+    border-radius: 4px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 20px;
+    align-items: center;
+  }
+
+  .summary-item { text-align: center; }
+
+  .summary-num {
+    font-family: 'Fraunces', serif;
+    font-size: 42px;
+    font-weight: 600;
+    line-height: 1;
+    font-feature-settings: "lnum";
+  }
+
+  .summary-num.ok { color: #7bc68c; }
+  .summary-num.fail { color: #ff8a70; }
+
+  .summary-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-top: 6px;
+  }
+
+  /* ── Utilities ── */
+  .run-all-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+  }
+
+  .btn-ghost:hover {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+
+  .footer-note {
+    margin-top: 32px;
+    padding: 16px 20px;
+    background: var(--warning-soft);
+    border-left: 3px solid var(--warning);
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-radius: 2px;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 20px 12px 60px; }
+    .brand-name { font-size: 28px; }
+    .test-header { flex-direction: column; align-items: stretch; }
+    .test-meta { width: 100%; }
+    .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="brand">
+      <h1 class="brand-name">MedTrack <em>API</em> Console</h1>
+      <span class="version-pill">v1.4.0 TEST</span>
+    </div>
+    <p class="subtitle">// Session 3 · Medications CRUD + Scheduler · 23 Apr 2026</p>
+  </header>
+
+  <!-- Status bar -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-item">
+      <span class="status-label">Backend</span>
+      <span class="status-value"><span class="status-dot" id="dotBackend"></span><span id="backendStatus">checking...</span></span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Database</span>
+      <span class="status-value"><span class="status-dot" id="dotDB"></span><span id="dbStatus">—</span></span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Scheduler</span>
+      <span class="status-value"><span class="status-dot" id="dotScheduler"></span><span id="schedulerStatus">—</span></span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">User ID</span>
+      <span class="status-value" id="userIdLabel">2</span>
+    </div>
+  </div>
+
+  <!-- Run all button -->
+  <div class="run-all-wrap">
+    <button class="btn btn-ghost" id="runAll">▶ Run All Tests</button>
+  </div>
+
+  <!-- Tests -->
+  <div id="testList"></div>
+
+  <!-- Summary -->
+  <div class="summary" id="summary" style="display:none;">
+    <div class="summary-item">
+      <div class="summary-num" id="sumTotal">0</div>
+      <div class="summary-label">Total</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-num ok" id="sumPass">0</div>
+      <div class="summary-label">Passed</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-num fail" id="sumFail">0</div>
+      <div class="summary-label">Failed</div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <strong>💡 Tip:</strong> เรียงลำดับ Test 1 → 7 ก่อนเพื่อให้ user_id=2 มีข้อมูล medications สำหรับ test สุดท้าย · ถ้า backend หรือ DB down จะเห็น dot สีแดง
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  MedTrack API Test Console
+// ═══════════════════════════════════════════════════════════════════
+
+const BASE = 'https://medtrack-backend-production-7731.up.railway.app';
+const USER_ID = 2;
+
+// ── State: track which medication IDs we created (for cleanup) ──
+const createdMedIds = [];
+
+// ── Test definitions ──
+const TESTS = [
+  {
+    id: 1,
+    title: 'Health Check',
+    desc: 'GET /health — ตรวจ backend, DB, scheduler',
+    run: async () => {
+      const res = await fetch(`${BASE}/health`);
+      const data = await res.json();
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'status = "ok"',         pass: data.status === 'ok' },
+          { label: 'db = "connected"',      pass: data.db === 'connected' },
+          { label: 'scheduler = "active"',  pass: data.scheduler === 'active' },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 2,
+    title: 'GET medications — initial state',
+    desc: 'GET /api/medications?user_id=2',
+    run: async () => {
+      const res = await fetch(`${BASE}/api/medications?user_id=${USER_ID}`);
+      const data = await res.json();
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'ok = true',               pass: data.ok === true },
+          { label: 'medications is array',    pass: Array.isArray(data.medications) },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 3,
+    title: 'POST Metformin (2 doses)',
+    desc: 'หลังอาหารเช้า + หลังอาหารเย็น · <code>reminder_time</code> ต้อง = 07:15 และ 18:15',
+    run: async () => {
+      const res = await fetch(`${BASE}/api/medications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: USER_ID,
+          drug_name: 'Metformin',
+          drug_name_en: 'Metformin',
+          dose_mg: 500,
+          dose_unit: 'mg',
+          tablets_per_dose: 1,
+          frequency_per_day: 2,
+          timing_type: 'meal',
+          total_tablets: 60,
+          total_days: 30,
+          schedules: [
+            { meal_anchor: 'breakfast', meal_relation: 'after' },
+            { meal_anchor: 'dinner', meal_relation: 'after' }
+          ]
+        })
+      });
+      const data = await res.json();
+      if (data.medication?.id) createdMedIds.push(data.medication.id);
+      
+      const s = data.schedules || [];
+      const byAnchor = {};
+      s.forEach(x => byAnchor[x.meal_anchor] = x.reminder_time);
+      
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'ok = true',                           pass: data.ok === true },
+          { label: 'medication.id exists',                pass: !!data.medication?.id },
+          { label: 'drug_name = "Metformin"',             pass: data.medication?.drug_name === 'Metformin' },
+          { label: 'schedules.length = 2',                pass: s.length === 2 },
+          { label: 'breakfast reminder = "07:15"',        pass: byAnchor.breakfast === '07:15' },
+          { label: 'dinner reminder = "18:15"',           pass: byAnchor.dinner === '18:15' },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 4,
+    title: 'POST Omeprazole (before breakfast)',
+    desc: '<code>reminder_time</code> ต้อง = 06:45 (07:00 - 15)',
+    run: async () => {
+      const res = await fetch(`${BASE}/api/medications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: USER_ID,
+          drug_name: 'Omeprazole',
+          dose_mg: 20,
+          dose_unit: 'mg',
+          tablets_per_dose: 1,
+          schedules: [
+            { meal_anchor: 'breakfast', meal_relation: 'before' }
+          ]
+        })
+      });
+      const data = await res.json();
+      if (data.medication?.id) createdMedIds.push(data.medication.id);
+      
+      const rt = data.schedules?.[0]?.reminder_time;
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'ok = true',                    pass: data.ok === true },
+          { label: 'schedules.length = 1',         pass: data.schedules?.length === 1 },
+          { label: 'reminder_time = "06:45"',      pass: rt === '06:45' },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 5,
+    title: 'POST Lorazepam (bedtime)',
+    desc: '<code>reminder_time</code> ต้อง = 21:00 ตรงเวลา (no offset)',
+    run: async () => {
+      const res = await fetch(`${BASE}/api/medications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: USER_ID,
+          drug_name: 'Lorazepam',
+          dose_mg: 0.5,
+          dose_unit: 'mg',
+          tablets_per_dose: 1,
+          schedules: [
+            { meal_anchor: 'bedtime', meal_relation: '' }
+          ]
+        })
+      });
+      const data = await res.json();
+      if (data.medication?.id) createdMedIds.push(data.medication.id);
+      
+      const rt = data.schedules?.[0]?.reminder_time;
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'ok = true',                    pass: data.ok === true },
+          { label: 'reminder_time = "21:00"',      pass: rt === '21:00' },
+          { label: 'meal_anchor = "bedtime"',      pass: data.schedules?.[0]?.meal_anchor === 'bedtime' },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 6,
+    title: 'GET medications (list all)',
+    desc: 'ต้องเห็นยาที่สร้างทั้ง 3 ตัวพร้อม schedules',
+    run: async () => {
+      const res = await fetch(`${BASE}/api/medications?user_id=${USER_ID}`);
+      const data = await res.json();
+      const meds = data.medications || [];
+      const names = meds.map(m => m.drug_name);
+      
+      return {
+        data,
+        status: res.status,
+        assertions: [
+          { label: 'ok = true',                        pass: data.ok === true },
+          { label: 'medications.length >= 3',          pass: meds.length >= 3 },
+          { label: 'has Metformin',                    pass: names.includes('Metformin') },
+          { label: 'has Omeprazole',                   pass: names.includes('Omeprazole') },
+          { label: 'has Lorazepam',                    pass: names.includes('Lorazepam') },
+          { label: 'every med has schedules array',    pass: meds.every(m => Array.isArray(m.schedules)) },
+        ]
+      };
+    }
+  },
+
+  {
+    id: 7,
+    title: 'DELETE medication (cleanup)',
+    desc: 'ลบยาตัวแรกที่สร้าง แล้ว GET ต้องไม่เห็น',
+    run: async () => {
+      if (createdMedIds.length === 0) {
+        throw new Error('ไม่มียาให้ลบ — กรุณารัน Test 3 ก่อน');
+      }
+      const targetId = createdMedIds[0];
+      
+      const delRes = await fetch(`${BASE}/api/medications/${targetId}`, { method: 'DELETE' });
+      const delData = await delRes.json();
+      
+      // Verify it's gone
+      const listRes = await fetch(`${BASE}/api/medications?user_id=${USER_ID}`);
+      const listData = await listRes.json();
+      const stillThere = (listData.medications || []).some(m => m.id === targetId);
+      
+      return {
+        data: { delete_response: delData, list_after: listData },
+        status: delRes.status,
+        assertions: [
+          { label: 'delete ok = true',              pass: delData.ok === true },
+          { label: `id = ${targetId} returned`,     pass: delData.id === targetId },
+          { label: 'deleted med not in list',       pass: !stillThere },
+        ]
+      };
+    }
+  },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  Rendering
+// ═══════════════════════════════════════════════════════════════════
+
+function renderTests() {
+  const list = document.getElementById('testList');
+  list.innerHTML = TESTS.map(t => `
+    <article class="test-card" id="card-${t.id}">
+      <header class="test-header">
+        <div class="test-meta">
+          <span class="test-num">${String(t.id).padStart(2, '0')}</span>
+          <div class="test-info">
+            <div class="test-title">${t.title}</div>
+            <div class="test-desc">${t.desc}</div>
+          </div>
+        </div>
+        <button class="btn" data-test="${t.id}">Run Test</button>
+      </header>
+      <div class="test-result" id="result-${t.id}"></div>
+    </article>
+  `).join('');
+  
+  list.querySelectorAll('button[data-test]').forEach(btn => {
+    btn.addEventListener('click', () => runSingle(parseInt(btn.dataset.test)));
+  });
+}
+
+function syntaxHighlight(json) {
+  const str = JSON.stringify(json, null, 2);
+  return str
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"([^"\\]*(?:\\.[^"\\]*)*)"(\s*:)/g, '<span class="k">"$1"</span>$2')
+    .replace(/:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g, ': <span class="s">"$1"</span>')
+    .replace(/:\s*(-?\d+\.?\d*)/g, ': <span class="n">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span class="b">$1</span>');
+}
+
+async function runSingle(id) {
+  const test = TESTS.find(t => t.id === id);
+  if (!test) return;
+  
+  const card = document.getElementById(`card-${id}`);
+  const resultEl = document.getElementById(`result-${id}`);
+  const btn = card.querySelector('button[data-test]');
+  
+  card.classList.remove('is-passing', 'is-failing');
+  btn.classList.add('is-loading');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  
+  const startTime = performance.now();
+  let resultHTML = '';
+  let allPassed = false;
+  
+  try {
+    const result = await test.run();
+    const duration = Math.round(performance.now() - startTime);
+    allPassed = result.assertions.every(a => a.pass);
+    const passCount = result.assertions.filter(a => a.pass).length;
+    
+    resultHTML = `
+      <div class="result-status ${allPassed ? 'is-success' : 'is-error'}">
+        <span class="badge ${allPassed ? 'success' : 'error'}">
+          ${allPassed ? '✓ PASS' : '✗ FAIL'}
+        </span>
+        ${passCount} / ${result.assertions.length} assertions passed
+      </div>
+      <div class="result-meta">
+        <span>HTTP ${result.status}</span>
+        <span>${duration}ms</span>
+      </div>
+      <div class="assertions">
+        ${result.assertions.map(a => `
+          <div class="assertion-line ${a.pass ? 'pass' : 'fail'}">
+            ${a.pass ? '✓' : '✗'} ${a.label}
+          </div>
+        `).join('')}
+      </div>
+      <div class="code-block">${syntaxHighlight(result.data)}</div>
+    `;
+    
+    card.classList.add(allPassed ? 'is-passing' : 'is-failing');
+  } catch (e) {
+    resultHTML = `
+      <div class="result-status is-error">
+        <span class="badge error">✗ ERROR</span>
+        Request failed
+      </div>
+      <div class="assertions">
+        <div class="assertion-line fail">✗ ${e.message}</div>
+      </div>
+      <div class="code-block">${e.stack || e.message}</div>
+    `;
+    card.classList.add('is-failing');
+  }
+  
+  resultEl.innerHTML = resultHTML;
+  resultEl.classList.add('is-open');
+  
+  btn.classList.remove('is-loading');
+  btn.disabled = false;
+  btn.textContent = allPassed ? '✓ Passed — Run Again' : '↻ Retry';
+  
+  updateSummary();
+}
+
+function updateSummary() {
+  const cards = document.querySelectorAll('.test-card');
+  let pass = 0, fail = 0, ran = 0;
+  cards.forEach(c => {
+    if (c.classList.contains('is-passing')) { pass++; ran++; }
+    else if (c.classList.contains('is-failing')) { fail++; ran++; }
+  });
+  
+  if (ran === 0) {
+    document.getElementById('summary').style.display = 'none';
+    return;
+  }
+  
+  document.getElementById('summary').style.display = 'grid';
+  document.getElementById('sumTotal').textContent = ran;
+  document.getElementById('sumPass').textContent = pass;
+  document.getElementById('sumFail').textContent = fail;
+}
+
+async function runAll() {
+  const btn = document.getElementById('runAll');
+  btn.disabled = true;
+  btn.textContent = '⟳ Running…';
+  
+  for (const test of TESTS) {
+    await runSingle(test.id);
+    await new Promise(r => setTimeout(r, 200));  // small gap between requests
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '▶ Run All Tests';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Backend status check on load
+// ═══════════════════════════════════════════════════════════════════
+async function checkBackendStatus() {
+  const dotBackend = document.getElementById('dotBackend');
+  const dotDB = document.getElementById('dotDB');
+  const dotScheduler = document.getElementById('dotScheduler');
+  const backendStatus = document.getElementById('backendStatus');
+  const dbStatus = document.getElementById('dbStatus');
+  const schedulerStatus = document.getElementById('schedulerStatus');
+  
+  dotBackend.classList.add('wait');
+  
+  try {
+    const res = await fetch(`${BASE}/health`);
+    const data = await res.json();
+    
+    dotBackend.classList.remove('wait');
+    if (data.status === 'ok') {
+      dotBackend.classList.add('ok');
+      backendStatus.textContent = 'v1.4.0 online';
+    } else {
+      dotBackend.classList.add('error');
+      backendStatus.textContent = 'degraded';
+    }
+    
+    if (data.db === 'connected') {
+      dotDB.classList.add('ok');
+      dbStatus.textContent = 'connected';
+    } else {
+      dotDB.classList.add('error');
+      dbStatus.textContent = 'disconnected';
+    }
+    
+    if (data.scheduler === 'active') {
+      dotScheduler.classList.add('ok');
+      schedulerStatus.textContent = 'active';
+    } else {
+      dotScheduler.classList.add('error');
+      schedulerStatus.textContent = data.scheduler || 'disabled';
+    }
+  } catch (e) {
+    dotBackend.classList.remove('wait');
+    dotBackend.classList.add('error');
+    backendStatus.textContent = 'offline';
+    dotDB.classList.add('error');
+    dbStatus.textContent = 'unreachable';
+    dotScheduler.classList.add('error');
+    schedulerStatus.textContent = 'unreachable';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Init
+// ═══════════════════════════════════════════════════════════════════
+renderTests();
+checkBackendStatus();
+document.getElementById('runAll').addEventListener('click', runAll);
+</script>
+
+</body>
+</html>
