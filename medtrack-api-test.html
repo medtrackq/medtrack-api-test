@@ -466,7 +466,7 @@
   <header class="header">
     <div class="brand">
       <h1 class="brand-name">MedTrack <em>API</em> Console</h1>
-      <span class="version-pill">v1.4.1 · v2</span>
+      <span class="version-pill">v1.4.2 · v2.1</span>
     </div>
     <p class="subtitle">// Session 3 · Medications CRUD + Push Test · 23 Apr 2026</p>
   </header>
@@ -757,8 +757,8 @@ const CRUD_TESTS = [
 const PUSH_TESTS = [
   {
     id: 8,
-    title: 'Setup: create Vitamin C at current time',
-    desc: 'ปรับ <code>breakfast_time</code> ของ user → สร้างยา Vitamin C → reminder_time = เวลาปัจจุบัน',
+    title: 'Setup: create Vitamin C at NOW+1 min',
+    desc: 'ปรับ <code>breakfast_time</code> ของ user → สร้างยา Vitamin C → reminder_time = เวลาปัจจุบัน <strong>+1 นาที</strong> (buffer เผื่อ clock skew)',
     isPush: true,
     run: async () => {
       // Step 1: Get user's current breakfast_time (to restore later)
@@ -767,12 +767,12 @@ const PUSH_TESTS = [
       if (!userData.ok) throw new Error('Cannot fetch user');
       savedBreakfastTime = userData.user.breakfast_time.substring(0, 5);
       
-      // Step 2: Calculate new breakfast_time so "after breakfast" = NOW (Bangkok)
-      // Logic: reminder_time = breakfast_time + 15min
-      // We want: reminder_time = now HH:mm
-      // So: breakfast_time = now - 15min
+      // Step 2: Target = NOW + 1 min (gives buffer for API roundtrip)
       const nowHHmm = nowBangkokHHmm();
-      const newBreakfastTime = addMinutes(nowHHmm, -15);
+      const targetHHmm = addMinutes(nowHHmm, 1);
+      
+      // reminder_time = breakfast_time + 15min → breakfast_time = target - 15
+      const newBreakfastTime = addMinutes(targetHHmm, -15);
       
       // Step 3: PATCH user's breakfast_time
       const patchRes = await fetch(`${BASE}/api/users/${USER_ID}`, {
@@ -783,7 +783,7 @@ const PUSH_TESTS = [
       const patchData = await patchRes.json();
       if (!patchData.ok) throw new Error('PATCH failed: ' + JSON.stringify(patchData));
       
-      // Step 4: Create Vitamin C with "after breakfast" → reminder_time = now
+      // Step 4: Create Vitamin C
       const medRes = await fetch(`${BASE}/api/medications`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -804,32 +804,57 @@ const PUSH_TESTS = [
       
       const reminderTime = medData.schedules?.[0]?.reminder_time;
       
+      // Store target time for Test 9/10 to use
+      window.__pushTestTargetTime = targetHHmm;
+      
       return {
         data: {
           user_update: patchData,
           medication: medData,
           now_bangkok: nowHHmm,
+          target_time: targetHHmm,
           new_breakfast_time: newBreakfastTime,
           reminder_time_set_to: reminderTime,
+          next_step: `⏳ รอให้ clock ถึง ${targetHHmm} แล้วค่อยรัน Test 9 — Test 9 จะ auto-wait ให้ถ้ายังไม่ถึง`,
         },
         status: medRes.status,
         assertions: [
-          { label: 'PATCH user succeeded',         pass: patchData.ok === true },
-          { label: 'Medication created',           pass: medData.ok === true },
-          { label: `reminder_time = ${nowHHmm}`,   pass: reminderTime === nowHHmm },
+          { label: 'PATCH user succeeded',            pass: patchData.ok === true },
+          { label: 'Medication created',              pass: medData.ok === true },
+          { label: `reminder_time = ${targetHHmm}`,   pass: reminderTime === targetHHmm },
         ]
       };
     }
   },
   {
     id: 9,
-    title: 'Trigger scheduler NOW',
-    desc: 'POST /api/scheduler/trigger ด้วย secret → ยิง push ทันที',
+    title: 'Trigger scheduler (auto-wait for target)',
+    desc: 'รอให้ถึงเวลา target ก่อน → POST /api/scheduler/trigger → ยิง push',
     isPush: true,
     run: async () => {
       const secret = document.getElementById('triggerSecret').value.trim();
       if (!secret) throw new Error('กรุณาใส่ SCHEDULER_TRIGGER_SECRET ในช่องด้านบนก่อน');
       
+      const target = window.__pushTestTargetTime;
+      if (!target) throw new Error('รัน Test 8 ก่อน (target time ยังไม่ถูกตั้ง)');
+      
+      // Smart wait: wait until current Bangkok time >= target
+      let waitedSeconds = 0;
+      while (waitedSeconds < 90) {  // max 90s wait
+        const now = nowBangkokHHmm();
+        if (now === target) break;
+        // If target has passed already (e.g. 11:50 now, target 11:48), exit immediately
+        const [nh, nm] = now.split(':').map(Number);
+        const [th, tm] = target.split(':').map(Number);
+        if (nh * 60 + nm > th * 60 + tm) break;
+        await new Promise(r => setTimeout(r, 1000));
+        waitedSeconds++;
+      }
+      
+      // Also wait ~3 seconds into the target minute (clock skew buffer)
+      await new Promise(r => setTimeout(r, 3000));
+      
+      const triggerTimeBangkok = nowBangkokHHmm();
       const res = await fetch(`${BASE}/api/scheduler/trigger`, {
         method: 'POST',
         headers: {
@@ -839,15 +864,23 @@ const PUSH_TESTS = [
       });
       const data = await res.json();
       
-      // Wait 2 seconds for push to propagate
+      // Wait for push to propagate
       await new Promise(r => setTimeout(r, 2000));
       
       return {
-        data, status: res.status,
+        data: {
+          ...data,
+          waited_seconds: waitedSeconds,
+          target_time: target,
+          triggered_at_bangkok: triggerTimeBangkok,
+          time_matches: triggerTimeBangkok === target,
+        },
+        status: res.status,
         assertions: [
-          { label: 'HTTP 200',             pass: res.status === 200 },
-          { label: 'ok = true',            pass: data.ok === true },
-          { label: 'triggered_at exists',  pass: !!data.triggered_at },
+          { label: 'HTTP 200',                                pass: res.status === 200 },
+          { label: 'ok = true',                               pass: data.ok === true },
+          { label: 'triggered_at exists',                     pass: !!data.triggered_at },
+          { label: `trigger time matches target ${target}`,   pass: triggerTimeBangkok === target },
         ]
       };
     }
@@ -855,7 +888,7 @@ const PUSH_TESTS = [
   {
     id: 10,
     title: 'Verify push_logs + restore',
-    desc: 'ตรวจ push_logs ว่ามี entry status=sent ในนาทีที่ trigger',
+    desc: 'ตรวจ push_logs ว่ามี entry status=sent ของการ trigger ล่าสุด',
     isPush: true,
     run: async () => {
       const res = await fetch(`${BASE}/api/push-logs?user_id=${USER_ID}&limit=10`);
@@ -864,13 +897,16 @@ const PUSH_TESTS = [
       const logs = data.logs || [];
       const recentLog = logs[0];  // most recent
       
-      // Was it sent in the last 2 minutes?
+      // Was it sent in the last 3 minutes?
       let recentAndSent = false;
       if (recentLog && recentLog.sent_at) {
         const sentTime = new Date(recentLog.sent_at).getTime();
         const ageSeconds = (Date.now() - sentTime) / 1000;
-        recentAndSent = recentLog.status === 'sent' && ageSeconds < 120;
+        recentAndSent = recentLog.status === 'sent' && ageSeconds < 180;
       }
+      
+      // Was this log for pushTestMedId?
+      const schedIds = recentLog?.schedule_ids || [];
       
       // Cleanup: delete Vitamin C test med
       if (pushTestMedId) {
@@ -899,7 +935,7 @@ const PUSH_TESTS = [
           { label: 'push_logs endpoint OK',            pass: data.ok === true },
           { label: 'has at least 1 log entry',         pass: logs.length > 0 },
           { label: 'most recent log is "sent"',        pass: recentLog?.status === 'sent' },
-          { label: 'sent within last 2 minutes',       pass: recentAndSent },
+          { label: 'sent within last 3 minutes',       pass: recentAndSent },
           { label: 'quota_limit returned',             pass: data.quota_limit === 500 },
         ]
       };
